@@ -1,7 +1,7 @@
 "use client"
 
 import { motion } from "framer-motion"
-import { Umbrella, Info, CloudRain } from "lucide-react"
+import { Umbrella, Info, CloudRain } from 'lucide-react'
 import type { Hour } from "@/types/weather"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
@@ -12,6 +12,22 @@ interface PrecipitationChartProps {
 }
 
 export function PrecipitationChart({ hours, timeFormat }: PrecipitationChartProps) {
+  if (!hours || !Array.isArray(hours) || hours.length === 0) {
+    return (
+      <Card className="bg-gradient-to-br from-background/80 to-background/40 backdrop-blur-md border-muted/30">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-lg font-medium flex items-center gap-2">
+            <Umbrella className="h-5 w-5 text-blue-500" />
+            Precipitation Forecast
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="text-muted-foreground text-center py-8">No precipitation data available</div>
+        </CardContent>
+      </Card>
+    )
+  }
+
   // Filter hours to only show future hours from current time
   const currentTime = new Date()
   const futureHours = hours
@@ -21,17 +37,36 @@ export function PrecipitationChart({ hours, timeFormat }: PrecipitationChartProp
     })
     .slice(0, 12) // Show next 12 hours
 
-  const maxPrecipitation = Math.max(...futureHours.map((hour) => hour.precip_mm), 1)
+  if (futureHours.length === 0) {
+    return (
+      <Card className="bg-gradient-to-br from-background/80 to-background/40 backdrop-blur-md border-muted/30">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-lg font-medium flex items-center gap-2">
+            <Umbrella className="h-5 w-5 text-blue-500" />
+            Precipitation Forecast
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="text-muted-foreground text-center py-8">No precipitation data available for the next 12 hours</div>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  const maxPrecipitation = Math.max(...futureHours.map((hour) => hour.precip_mm || 0), 1)
 
   // Calculate total precipitation for the period
-  const totalPrecipitation = futureHours.reduce((sum, hour) => sum + hour.precip_mm, 0)
+  const totalPrecipitation = futureHours.reduce((sum, hour) => sum + (hour.precip_mm || 0), 0)
 
   // Determine if there's any significant precipitation
   const hasPrecipitation = totalPrecipitation > 0.1
 
-  // Find the hour with highest chance of rain
   const maxRainChanceHour = futureHours.reduce(
-    (max, hour) => (hour.chance_of_rain > max.chance_of_rain ? hour : max),
+    (max, hour) => {
+      const currentChance = hour.chance_of_rain || 0
+      const maxChance = max.chance_of_rain || 0
+      return currentChance > maxChance ? hour : max
+    },
     futureHours[0],
   )
 
@@ -78,7 +113,7 @@ export function PrecipitationChart({ hours, timeFormat }: PrecipitationChartProp
             <div className="flex items-center justify-between">
               <span className="text-sm font-medium">Highest Chance:</span>
               <span className="text-sm font-bold">
-                {maxRainChanceHour.chance_of_rain}% at {formatTime(maxRainChanceHour.time)}
+                {maxRainChanceHour?.chance_of_rain || 0}% at {formatTime(maxRainChanceHour?.time || "")}
               </span>
             </div>
             {hasPrecipitation ? (
@@ -106,12 +141,12 @@ export function PrecipitationChart({ hours, timeFormat }: PrecipitationChartProp
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <div className="absolute top-0 w-full text-center cursor-help">
-                        <span className="text-xs font-medium">{hour.chance_of_rain}%</span>
+                        <span className="text-xs font-medium">{hour.chance_of_rain || 0}%</span>
                       </div>
                     </TooltipTrigger>
                     <TooltipContent>
                       <p>
-                        {hour.chance_of_rain}% chance of rain at {formatTime(hour.time)}
+                        {hour.chance_of_rain || 0}% chance of rain at {formatTime(hour.time)}
                       </p>
                       {hour.precip_mm > 0 && <p>{hour.precip_mm} mm expected</p>}
                     </TooltipContent>

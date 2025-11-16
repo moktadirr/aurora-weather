@@ -5,6 +5,7 @@ import { Thermometer, Info } from "lucide-react"
 import type { Hour } from "@/types/weather"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { useEffect, useState } from "react"
 
 interface TemperatureChartProps {
   hours: Hour[]
@@ -13,38 +14,92 @@ interface TemperatureChartProps {
 }
 
 export function TemperatureChart({ hours, timeFormat, temperatureUnit }: TemperatureChartProps) {
-  // Filter hours to only show future hours from current time
+  const [isMobile, setIsMobile] = useState(false)
+
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth <= 768)
+    checkMobile()
+    window.addEventListener("resize", checkMobile)
+    return () => window.removeEventListener("resize", checkMobile)
+  }, [])
+
+  if (!hours || !Array.isArray(hours) || hours.length === 0) {
+    return (
+      <Card className="bg-gradient-to-br from-background/80 to-background/40 backdrop-blur-md border-muted/30">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-lg font-medium flex items-center gap-2">
+            <Thermometer className="h-5 w-5 text-red-500" />
+            Temperature Forecast
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="h-[200px] flex items-center justify-center text-muted-foreground">
+            No temperature data available
+          </div>
+        </CardContent>
+      </Card>
+    )
+  }
+
   const currentTime = new Date()
-  const futureHours = hours
+  const validHours = hours
     .filter((hour) => {
+      // Check if hour exists and has required temperature properties
+      if (!hour || typeof hour.temp_c !== "number" || typeof hour.temp_f !== "number") {
+        return false
+      }
       const hourTime = new Date(hour.time)
       return hourTime > currentTime
     })
     .slice(0, 12) // Show next 12 hours
 
-  const getTemp = (hour: Hour) => {
-    return temperatureUnit === "celsius" ? hour.temp_c : hour.temp_f
+  if (validHours.length === 0) {
+    return (
+      <Card className="bg-gradient-to-br from-background/80 to-background/40 backdrop-blur-md border-muted/30">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-lg font-medium flex items-center gap-2">
+            <Thermometer className="h-5 w-5 text-red-500" />
+            Temperature Forecast
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="h-[200px] flex items-center justify-center text-muted-foreground">
+            No future temperature data available
+          </div>
+        </CardContent>
+      </Card>
+    )
   }
 
-  const temperatures = futureHours.map((hour) => getTemp(hour))
+  const getTemp = (hour: Hour) => {
+    if (!hour) return 0
+    const temp = temperatureUnit === "celsius" ? hour.temp_c : hour.temp_f
+    return typeof temp === "number" ? temp : 0
+  }
+
+  const temperatures = validHours.map((hour) => getTemp(hour))
   const minTemp = Math.min(...temperatures) - 2
   const maxTemp = Math.max(...temperatures) + 2
-  const tempRange = maxTemp - minTemp
+  const tempRange = maxTemp - minTemp || 1 // Prevent division by zero
 
   const formatTime = (timeString: string) => {
-    const date = new Date(timeString)
-    if (timeFormat === "24h") {
+    try {
+      const date = new Date(timeString)
+      if (timeFormat === "24h") {
+        return date.toLocaleTimeString("en-US", {
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: false,
+        })
+      }
       return date.toLocaleTimeString("en-US", {
-        hour: "2-digit",
+        hour: "numeric",
         minute: "2-digit",
-        hour12: false,
+        hour12: true,
       })
+    } catch {
+      return "N/A"
     }
-    return date.toLocaleTimeString("en-US", {
-      hour: "numeric",
-      minute: "2-digit",
-      hour12: true,
-    })
   }
 
   return (
@@ -59,7 +114,7 @@ export function TemperatureChart({ hours, timeFormat, temperatureUnit }: Tempera
                 <Info className="h-4 w-4 opacity-0 group-hover:opacity-50 transition-opacity cursor-help" />
               </TooltipTrigger>
               <TooltipContent>
-                <p>Temperature forecast for the next 12 hours</p>
+                <p>Temperature forecast for the next {validHours.length} hours</p>
               </TooltipContent>
             </Tooltip>
           </CardTitle>
@@ -100,7 +155,7 @@ export function TemperatureChart({ hours, timeFormat, temperatureUnit }: Tempera
 
             {/* Temperature chart */}
             <div className="absolute inset-0 flex items-end pt-6 pb-8">
-              <svg className="w-full h-full" viewBox={`0 0 ${futureHours.length - 1} 1`} preserveAspectRatio="none">
+              <svg className="w-full h-full" viewBox={`0 0 ${validHours.length - 1} 1`} preserveAspectRatio="none">
                 <defs>
                   <linearGradient id="tempGradient" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="0%" stopColor="rgb(239, 68, 68)" stopOpacity="0.5" />
@@ -108,34 +163,35 @@ export function TemperatureChart({ hours, timeFormat, temperatureUnit }: Tempera
                     <stop offset="100%" stopColor="rgb(59, 130, 246)" stopOpacity="0.5" />
                   </linearGradient>
                 </defs>
-                <motion.path
-                  d={`M 0,${1 - (getTemp(futureHours[0]) - minTemp) / tempRange} ${futureHours
-                    .slice(1)
-                    .map((hour, i) => {
-                      return `L ${i + 1},${1 - (getTemp(hour) - minTemp) / tempRange}`
-                    })
-                    .join(" ")}`}
-                  fill="none"
-                  stroke="url(#tempGradient)"
-                  strokeWidth="0.02"
-                  initial={{ pathLength: 0 }}
-                  animate={{ pathLength: 1 }}
-                  transition={{ duration: 1.5, ease: "easeInOut" }}
-                />
+                {validHours.length > 1 && (
+                  <motion.path
+                    d={`M 0,${1 - (getTemp(validHours[0]) - minTemp) / tempRange} ${validHours
+                      .slice(1)
+                      .map((hour, i) => {
+                        return `L ${i + 1},${1 - (getTemp(hour) - minTemp) / tempRange}`
+                      })
+                      .join(" ")}`}
+                    fill="none"
+                    stroke="url(#tempGradient)"
+                    strokeWidth="0.02"
+                    initial={{ pathLength: 0 }}
+                    animate={{ pathLength: 1 }}
+                    transition={{ duration: 1.5, ease: "easeInOut" }}
+                  />
+                )}
               </svg>
             </div>
 
-            {/* Temperature points and labels - fixed overlapping */}
+            {/* Temperature points and labels */}
             <div className="absolute inset-0 flex justify-between pt-6 pb-8">
-              {futureHours.map((hour, index) => {
+              {validHours.map((hour, index) => {
                 const temp = getTemp(hour)
                 const yPosition = 1 - (temp - minTemp) / tempRange
 
-                // Only show every other label on small screens to prevent overlapping
-                const showLabel = index % 2 === 0 || window.innerWidth > 768
+                const showLabel = index % 2 === 0 || !isMobile
 
                 return (
-                  <div key={hour.time_epoch} className="flex flex-col items-center justify-between h-full">
+                  <div key={hour.time_epoch || index} className="flex flex-col items-center justify-between h-full">
                     <motion.div
                       className="relative"
                       style={{ top: `${yPosition * 100}%` }}

@@ -20,7 +20,7 @@ export const metadata: Metadata = {
   description: "Experience weather in a whole new light with Aurora's futuristic weather dashboard",
   keywords: "weather, forecast, aurora, dashboard, real-time weather",
   authors: [{ name: "Moktadir", url: "https://github.com/moktadirr" }],
-    generator: 'v0.dev'
+    generator: 'v0.app'
 }
 
 export default function RootLayout({
